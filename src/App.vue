@@ -1,86 +1,148 @@
 <template>
   <div class="page-products">
     <h1>Products</h1>
-    <div class="page-products__grid">
-      <div v-if="isLoading">Loading...</div>
-      <Product v-for="product in products" :key="product.id" :product="product" v-else />
+    <div class="page-products__tabs">
+      <button :class="['page-products__tabs-button', {'page-products__tabs-button--is-active' : activeTab === 'all' }]"  @click="changeTab('all')">All Products</button>
+      <button :class="['page-products__tabs-button', {'page-products__tabs-button--is-active' : activeTab !== 'all' }]" @click="changeTab('filtered')">Filter by Price</button>
     </div>
-    <button @click="prevPage" :disabled="page === 1">Prev</button>
-    <span>{{ page }}</span>
-    <button @click="nextPage">Next</button>
-    <button @click="filterProducts('price', 17500.0)">Filter by Price</button>
+    <div v-if="isLoading">
+      <Loader/>
+    </div>
+    <div class="page-products__grid" v-else>
+      <template v-if="activeTab === 'all'">
+        <Product v-for="product in allProducts" :key="product.id" :product="product" />
+      </template>
+      <template v-else-if="activeTab === 'filtered'">
+        <Product v-for="product in filteredProducts" :key="product.id" :product="product" />
+      </template>
+    </div>
+    <div class="page-contacts__pagination">
+      <template v-if="activeTab === 'all'"> 
+        <button @click="prevPageAll" :disabled="pageAll === 1">Prev</button>
+          <span>{{ pageAll }}</span>
+        <button @click="nextPageAll">Next</button>
+      </template>
+      <template v-else-if="activeTab === 'filtered'">
+        <button @click="prevPageFiltered" :disabled="filterPage === 1">Prev</button>
+        <span>{{ filterPage }}</span>
+        <button @click="nextPageFiltered" :disabled="filteredProducts.length < 50">Next</button>
+      </template>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
-import { md5 } from 'js-md5';
+import { getIds, getItems, filterByField } from './api/api';
 import Product from './components/Product.vue';
+import Loader from './components/Loader.vue';
 import type { TProduct } from './types';
-
 const isLoading = ref<boolean>(true);
-const products = ref<TProduct[]>([]);
-const page = ref(1);
+const allProducts = ref<TProduct[]>([]);
+const filteredProducts = ref<TProduct[]>([]);
+const pageAll = ref(1);
 const pageSize = 50;
-const totalProducts = ref(0);
-const xAuth = md5('Valantis_' + new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+const filterPage = ref(1);
 
-async function fetchData() {
+const currentFilterField = ref<string>('');
+const currentFilterValue = ref<number | string>('');
+const activeTab = ref<'all' | 'filtered'>('all');
+
+async function fetchDataAll() {
   try {
-    const response = await axios.post(
-      'http://api.valantis.store:40000/',
-      { action: 'get_ids', params: { offset: (page.value - 1) * pageSize, limit: pageSize } },
-      { headers: { 'X-Auth': xAuth } }
-    );
-    const data = response.data.result;
-    totalProducts.value = data.length;
-    const productIds = data;
-    await fetchProducts(productIds);
+    const ids = await getIds((pageAll.value - 1) * pageSize, pageSize);
+    await getProducts(ids, 'all');
   } catch (error) {
-    console.error('Error fetching products:', error);
+    console.error('Error fetching all data', error);
   }
 }
 
-async function fetchProducts(ids: string[]) {
+async function fetchDataFiltered() {
+  try {
+    const ids = await filterByField(currentFilterField.value, currentFilterValue.value);
+    await getProducts(ids, 'filtered');
+  } catch (error) {
+    console.error('Error fetching filtered data', error);
+  }
+}
+
+async function getProducts(ids: string[], tab: 'all' | 'filtered') {
   try {
     isLoading.value = true;
-    const response = await axios.post(
-      'http://api.valantis.store:40000/',
-      { action: 'get_items', params: { ids } },
-      { headers: { 'X-Auth': xAuth } }
-    );
-    products.value = response.data.result;
+    const items = await getItems(ids);
+    if (tab === 'all') {
+      allProducts.value = items;
+    } else {
+      filteredProducts.value = items;
+    }
     isLoading.value = false;
   } catch (error) {
-    console.error('Error fetching product details:', error);
+    console.error('Error getting products', error);
   }
 }
 
-async function nextPage() {
-  page.value++;
-  await fetchData();
-}
-
-async function prevPage() {
-  page.value--;
-  await fetchData();
-}
-
-async function filterProducts(field: string, value: string | number) {
+async function filterProducts(field: string, value: number | string) {
   try {
-    isLoading.value = true;
-    const response = await axios.post(
-      'http://api.valantis.store:40000/',
-      { action: 'filter', params: { [field]: value } },
-      { headers: { 'X-Auth': xAuth } }
-    );
-    const filteredIds = response.data.result;
-    await fetchProducts(filteredIds);
+    currentFilterField.value = field;
+    currentFilterValue.value = value;
+    filterPage.value = 1;
+    await fetchDataFiltered();
   } catch (error) {
-    console.error('Error filtering products:', error);
+    console.error('Error filtering products', error);
   }
 }
 
-onMounted(fetchData);
+async function nextPageAll() {
+  pageAll.value++;
+  await fetchDataAll();
+}
+
+async function prevPageAll() {
+  if (pageAll.value > 1) {
+    pageAll.value--;
+    await fetchDataAll();
+  }
+}
+
+async function nextPageFiltered() {
+  filterPage.value++;
+  await fetchDataFiltered();
+}
+
+async function prevPageFiltered() {
+  if (filterPage.value > 1) {
+    filterPage.value--;
+    await fetchDataFiltered();
+  }
+}
+
+function changeTab(tab: 'all' | 'filtered') {
+  activeTab.value = tab;
+  if (tab === 'filtered') {
+    filterProducts('price', 17500.0); // Начальный фильтр по цене
+  } else {
+    fetchDataAll();
+  }
+}
+
+onMounted(fetchDataAll);
 </script>
+
+<style>
+.page-products__grid {
+  margin: 30px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+.page-products__tabs button:not(:last-child) {
+  margin-right: 20px;
+}
+.page-contacts__pagination >*:not(:last-child) {
+  margin-right: 20px;
+}
+.page-products__tabs-button--is-active {
+  background: #fff;
+  color: black;
+}
+</style>

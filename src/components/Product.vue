@@ -13,6 +13,9 @@
   }>();
 </script>
 
-<style scoped>
-
+<style>
+  .product {
+    border: 1px solid #fff;
+    padding: 10px;
+  }
 </style>
