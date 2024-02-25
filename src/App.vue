@@ -2,8 +2,21 @@
   <div class="page-products">
     <h1>Products</h1>
     <div class="page-products__tabs">
-      <button :class="['page-products__tabs-button', {'page-products__tabs-button--is-active' : activeTab === 'all' }]"  @click="changeTab('all')">All Products</button>
-      <button :class="['page-products__tabs-button', {'page-products__tabs-button--is-active' : activeTab !== 'all' }]" @click="changeTab('filtered')">Filter by Price</button>
+      <button :class="
+        [
+          'page-products__tabs-button', 
+          {'page-products__tabs-button--is-active' : activeTab === 'all' }
+        ]"  
+        @click="changeTab('all')">
+          All Products
+      </button>
+      <button :class="[
+        'page-products__tabs-button', 
+        {'page-products__tabs-button--is-active' : activeTab !== 'all' }
+        ]" 
+        @click="changeTab('filtered')">
+        Filter by Price
+      </button>
     </div>
     <div v-if="isLoading">
       <Loader/>
@@ -93,36 +106,46 @@ async function filterProducts(field: string, value: number | string) {
 }
 
 async function nextPageAll() {
+  isLoading.value = true;
   pageAll.value++;
   await fetchDataAll();
+  isLoading.value = false;
 }
 
 async function prevPageAll() {
+  isLoading.value = true;
   if (pageAll.value > 1) {
     pageAll.value--;
     await fetchDataAll();
   }
+  isLoading.value = false;
 }
 
 async function nextPageFiltered() {
+  isLoading.value = true;
   filterPage.value++;
   await fetchDataFiltered();
+  isLoading.value = false;
 }
 
 async function prevPageFiltered() {
+  isLoading.value = true;
   if (filterPage.value > 1) {
     filterPage.value--;
     await fetchDataFiltered();
   }
+  isLoading.value = false;
 }
 
 function changeTab(tab: 'all' | 'filtered') {
+  isLoading.value = true;
   activeTab.value = tab;
   if (tab === 'filtered') {
     filterProducts('price', 17500.0); // Начальный фильтр по цене
   } else {
     fetchDataAll();
   }
+  return isLoading.value = false;
 }
 
 onMounted(fetchDataAll);
